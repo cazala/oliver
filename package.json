@@ -1,0 +1,17 @@
+{
+  "name": "oliver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "isomorphic-fetch": "^3.0.0",
+    "node-telegram-bot-api": "^0.50.0"
+  }
+}
