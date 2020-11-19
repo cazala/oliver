@@ -12,8 +12,13 @@ const equipos = {}
 // Helpers
 //--------------------------------------------
 
-function getDia() {
-  return (Date.now() / (24 * 60 * 60 * 1000)) | 0
+function getSemana() {
+  // copypasta de stack overflow :+1:
+  d = new Date()
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  var weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7)
+  return weekNo
 }
 
 function getJugador(msg) {
@@ -34,11 +39,11 @@ function getJugador(msg) {
 }
 
 function getEquipo() {
-  const dia = getDia()
-  if (!equipos[dia]) {
-    equipos[dia] = new Set()
+  const semana = getSemana()
+  if (!equipos[semana]) {
+    equipos[semana] = new Set()
   }
-  return equipos[dia]
+  return equipos[semana]
 }
 
 function prefix() {
@@ -79,7 +84,7 @@ function print(chatId, jugador, juega) {
 // Comandos
 //--------------------------------------------
 
-// Temaño de equipos
+// Tamaño de equipos
 bot.onText(/^equipos de (\d+)/, (msg, match) => {
   const chatId = msg.chat.id
   const parsed = parseInt(match[1])
@@ -89,7 +94,7 @@ bot.onText(/^equipos de (\d+)/, (msg, match) => {
   }
 })
 
-// saludio
+// saludo
 bot.onText(/^(hola|Hola)$/, (msg, match) => {
   const chatId = msg.chat.id
   bot.sendMessage(chatId, 'hola caracola')
@@ -102,16 +107,20 @@ bot.onText(/^quien es (.+)/, (msg, match) => {
 })
 
 // {nombre} no juega
-bot.onText(/^(\w+) no juega$/, (msg, match) => {
+bot.onText(/^((\w|\.|\-|_)+) no juega$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
   const equipo = getEquipo()
-  equipo.delete(jugador)
-  print(chatId, jugador, false)
+  if (equipo.has(jugador)) {
+    equipo.delete(jugador)
+    print(chatId, jugador, false)
+  } else {
+    bot.sendMessage(chatId, `ok, igual ${jugador} no estaba anotade para jugar`)
+  }
 })
 
 // {nombre} juega
-bot.onText(/^(\w+) juega$/, (msg, match) => {
+bot.onText(/^((\w|\.|\-|_)+) juega$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
   const equipo = getEquipo()
@@ -141,8 +150,12 @@ bot.onText(/^(no juego|No juego)$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
   const equipo = getEquipo()
-  equipo.delete(jugador)
-  print(chatId, jugador, false)
+  if (equipo.has(jugador)) {
+    equipo.delete(jugador)
+    print(chatId, jugador, false)
+  } else {
+    bot.sendMessage(chatId, `ok, igual no estabas anotade para jugar`)
+  }
 })
 
 // Resetear
@@ -156,15 +169,22 @@ bot.onText(/^(reset|Reset)$/, (msg, match) => {
 })
 
 // Lista de anotados
-bot.onText(/^(lista|Lista|anotados|Anotados)$/, (msg, match) => {
-  const chatId = msg.chat.id
-  const equipo = getEquipo()
-  const lista = Array.from(equipo)
-  bot.sendMessage(
-    chatId,
-    `Por ahora tengo anotados a ${lista.length} personas:\n${lista.join('\n')}`
-  )
-})
+bot.onText(
+  /^(lista|Lista|anotados|Anotados|quienes juegan|quien juega|quienes juegan\?|quien juega\?)$/,
+  (msg, match) => {
+    const chatId = msg.chat.id
+    const equipo = getEquipo()
+    const lista = Array.from(equipo)
+    bot.sendMessage(
+      chatId,
+      lista.length === 0
+        ? `Por ahora no hay nadie anotado`
+        : `Por ahora tengo anotados a ${lista.length} personas:\n${lista.join(
+            '\n'
+          )}`
+    )
+  }
+)
 
 // Armar equipos
 bot.onText(/^(equipos|Equipos|equipo|Equipo)$/, (msg, match) => {
