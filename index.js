@@ -108,12 +108,14 @@ function cargar() {
 }
 
 function guardar() {
+  console.log('Guardando datos')
   try {
     const semana = getSemana()
     const data = {
       semana,
       partidos: {},
     }
+    console.log(`Guardando datos semana=${semana}`)
     if (partidos[semana]) {
       for (const chatId in partidos[semana]) {
         const partido = partidos[semana][chatId]
