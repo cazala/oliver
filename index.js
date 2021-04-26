@@ -5,8 +5,8 @@ const TelegramBot = require('node-telegram-bot-api')
 const token = process.env.TELEGRAM_BOT_TOKEN
 const bot = new TelegramBot(token, { polling: true })
 
-let equiposDe = 10
-const equipos = {}
+let total = 10
+const partidos = {}
 
 //--------------------------------------------
 // Helpers
@@ -33,17 +33,20 @@ function getJugador(msg) {
     jugador = msg.chat.username
   }
 
-  jugador = jugador.toLowerCase()
+  jugador = jugador ? jugador.toLowerCase() : 'alguien'
 
   return jugador
 }
 
-function getEquipo() {
+function getPartido(chatId) {
   const semana = getSemana()
-  if (!equipos[semana]) {
-    equipos[semana] = new Set()
+  if (!partidos[semana]) {
+    partidos[semana] = {}
   }
-  return equipos[semana]
+  if (!partidos[semana][chatId]) {
+    partidos[semana][chatId] = new Set()
+  }
+  return partidos[semana][chatId]
 }
 
 function prefix() {
@@ -61,18 +64,18 @@ function prefix() {
 }
 
 function print(chatId, jugador, juega) {
-  const equipo = getEquipo()
+  const partido = getPartido(chatId)
   try {
     bot.sendMessage(
       chatId,
       `${prefix()}${jugador} ${
         juega ? 'juega, ' : 'no juega... te deseamos lo peor, ahora '
       }${
-        equipo.size === equiposDe
-          ? 'equipo completo'
-          : equipo.size < equiposDe
-          ? `faltan ${equiposDe - equipo.size}`
-          : `sobran ${equipo.size - equiposDe}`
+        partido.size === total
+          ? 'equipos completos'
+          : partido.size < total
+          ? `faltan ${total - partido.size}`
+          : `sobran ${partido.size - total}`
       }`
     )
   } catch (e) {
@@ -89,7 +92,7 @@ bot.onText(/^equipos de (\d+)/, (msg, match) => {
   const chatId = msg.chat.id
   const parsed = parseInt(match[1])
   if (!isNaN(parsed)) {
-    equiposDe = parsed * 2
+    total = parsed * 2
     bot.sendMessage(chatId, 'joya, equipos de ' + parsed)
   }
 })
@@ -110,7 +113,7 @@ bot.onText(/^quien es (.+)/, (msg, match) => {
 bot.onText(/^((\w|\.|\-|_)+) no juega$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
-  const equipo = getEquipo()
+  const equipo = getPartido(chatId)
   if (equipo.has(jugador)) {
     equipo.delete(jugador)
     print(chatId, jugador, false)
@@ -123,7 +126,7 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/, (msg, match) => {
 bot.onText(/^((\w|\.|\-|_)+) juega$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
-  const equipo = getEquipo()
+  const equipo = getPartido(chatId)
   if (equipo.has(jugador)) {
     bot.sendMessage(chatId, `ya anote a ${jugador}`)
   } else {
@@ -136,7 +139,7 @@ bot.onText(/^((\w|\.|\-|_)+) juega$/, (msg, match) => {
 bot.onText(/^(juego|Juego)$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
-  const equipo = getEquipo()
+  const equipo = getPartido(chatId)
   if (equipo.has(jugador)) {
     bot.sendMessage(chatId, `ya te habia anotado, ${jugador}`)
   } else {
@@ -149,7 +152,7 @@ bot.onText(/^(juego|Juego)$/, (msg, match) => {
 bot.onText(/^(no juego|No juego)$/, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
-  const equipo = getEquipo()
+  const equipo = getPartido(chatId)
   if (equipo.has(jugador)) {
     equipo.delete(jugador)
     print(chatId, jugador, false)
@@ -161,7 +164,7 @@ bot.onText(/^(no juego|No juego)$/, (msg, match) => {
 // Resetear
 bot.onText(/^(reset|Reset)$/, (msg, match) => {
   const chatId = msg.chat.id
-  const equipo = getEquipo()
+  const equipo = getPartido(chatId)
   for (const persona of Array.from(equipo)) {
     equipo.delete(persona)
   }
@@ -173,7 +176,7 @@ bot.onText(
   /^(lista|Lista|anotados|Anotados|quienes juegan|quien juega|quienes juegan\?|quien juega\?)$/,
   (msg, match) => {
     const chatId = msg.chat.id
-    const equipo = getEquipo()
+    const equipo = getPartido(chatId)
     const lista = Array.from(equipo)
     bot.sendMessage(
       chatId,
@@ -189,7 +192,7 @@ bot.onText(
 // Armar equipos
 bot.onText(/^(equipos|Equipos|equipo|Equipo)$/, (msg, match) => {
   const chatId = msg.chat.id
-  const equipo = getEquipo()
+  const equipo = getPartido(chatId)
   const mezcladito = shuffle(Array.from(equipo))
   const mitad = (mezcladito.length / 2) | 0
   const equipo1 = []
@@ -237,6 +240,13 @@ bot.onText(/^precio (\w+)$/, async (msg, match) => {
   } catch (e) {
     bot.sendMessage(chatId, 'uf ni idea')
   }
+})
+
+// debug
+bot.onText(/^debug/, (msg, match) => {
+  const chatId = msg.chat.id
+  const semana = getSemana()
+  bot.sendMessage(chatId, `chatId: ${chatId}, semana: ${semana}`)
 })
 
 function shuffle(array) {
