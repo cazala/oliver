@@ -165,13 +165,34 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
 bot.onText(/^((\w|\.|\-|_)+) juega$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
-  const getPartido = getPartido(chatId)
-  if (getPartido.has(jugador)) {
+  const partido = getPartido(chatId)
+  if (partido.has(jugador)) {
     bot.sendMessage(chatId, `ya anote a ${jugador}`)
   } else {
-    getPartido.add(jugador)
+    partido.add(jugador)
     guardar()
     print(chatId, jugador, true)
+  }
+})
+
+// {nombre-1} {nombre-2} ...{nombre-N} juegan
+bot.onText(/^((\w|\s|\.|\-|_)+) juegan$/i, (msg, match) => {
+  const chatId = msg.chat.id
+  const jugadores = match[1]
+    .split(' ')
+    .filter((jugador) => !!jugador)
+    .map((jugador) => jugador.toLowerCase())
+  if (jugadores.length > 0) {
+    const partido = getPartido(chatId)
+    for (const jugador of jugadores) {
+      partido.add(jugador)
+    }
+    guardar()
+    if (jugadores.length === 1) {
+      print(chatId, jugadores[0], true)
+    } else {
+      bot.sendMessage(chatId, `Listo, anote a los ${jugadores.length}`)
+    }
   }
 })
 
