@@ -1,12 +1,14 @@
 require('isomorphic-fetch')
 require('dotenv').config()
+const fs = require('fs')
+const path = require('path')
 
 const TelegramBot = require('node-telegram-bot-api')
 const token = process.env.TELEGRAM_BOT_TOKEN
 const bot = new TelegramBot(token, { polling: true })
 
 let total = 10
-const partidos = {}
+let partidos = {}
 
 //--------------------------------------------
 // Helpers
@@ -40,12 +42,13 @@ function getJugador(msg) {
 
 function getPartido(chatId) {
   const semana = getSemana()
-  if (!partidos[semana]) {
-    partidos[semana] = {}
+  if (!partidos[chatId]) {
+    partidos[chatId] = {}
   }
   if (!partidos[semana][chatId]) {
     partidos[semana][chatId] = new Set()
   }
+
   return partidos[semana][chatId]
 }
 
@@ -68,9 +71,7 @@ function print(chatId, jugador, juega) {
   try {
     bot.sendMessage(
       chatId,
-      `${prefix()}${jugador} ${
-        juega ? 'juega, ' : 'no juega... te deseamos lo peor, ahora '
-      }${
+      `${prefix()}${jugador} ${juega ? 'juega, ' : 'no juega, ahora '}${
         partido.size === total
           ? 'equipos completos'
           : partido.size < total
@@ -83,47 +84,88 @@ function print(chatId, jugador, juega) {
   }
 }
 
+const ARCHIVO = path.resolve(__dirname, './data.json')
+
+function cargar() {
+  try {
+    const json = fs.readFileSync(ARCHIVO, 'utf-8')
+    data = JSON.parse(json)
+    if (data && data.semana === getSemana() && data.partidos) {
+      for (const chatId in data.partidos) {
+        const partido = getPartido(chatId)
+        for (const jugador of data.partidos[chatId]) {
+          partido.add(jugador)
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('ENOENT')) {
+      guardar()
+    } else {
+      console.log(`Error cargando archivo "${ARCHIVO}":`, error.message)
+    }
+  }
+}
+
+function guardar() {
+  try {
+    const semana = getSemana()
+    const data = {
+      semana,
+      partidos: {},
+    }
+    if (partidos[semana]) {
+      for (const chatId in partidos[semana]) {
+        const partido = partidos[semana][chatId]
+        if (partido instanceof Set && partido.size() > 0) {
+          data.partidos[chatId] = Array.from(partido)
+        }
+      }
+    } else {
+      console.log(`No hay partidos para guardar esta semana=${semana}`)
+    }
+    const json = JSON.stringify(data, null, 2)
+    fs.writeFileSync(ARCHIVO, json, 'utf8')
+  } catch (error) {
+    console.error(`Error guarando archivo "${ARCHIVO}":`, error.message)
+  }
+}
+
+// Cargar partidos
+cargar()
+
 //--------------------------------------------
 // Comandos
 //--------------------------------------------
 
-// Tamaño de equipos
-bot.onText(/^equipos de (\d+)/, (msg, match) => {
-  const chatId = msg.chat.id
-  const parsed = parseInt(match[1])
-  if (!isNaN(parsed)) {
-    total = parsed * 2
-    bot.sendMessage(chatId, 'joya, equipos de ' + parsed)
-  }
-})
-
 // saludo
-bot.onText(/^(hola|Hola)$/, (msg, match) => {
+bot.onText(/^hola$/i, (msg, match) => {
   const chatId = msg.chat.id
   bot.sendMessage(chatId, 'hola caracola')
 })
 
 // joder a Shibu
-bot.onText(/^quien es (.+)/, (msg, match) => {
+bot.onText(/^quien es (.+)/i, (msg, match) => {
   const chatId = msg.chat.id
   bot.sendMessage(chatId, match[1] + ' es Shibu, obvio')
 })
 
 // {nombre} no juega
-bot.onText(/^((\w|\.|\-|_)+) no juega$/, (msg, match) => {
+bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
   const equipo = getPartido(chatId)
   if (equipo.has(jugador)) {
     equipo.delete(jugador)
     print(chatId, jugador, false)
+    guardar()
   } else {
     bot.sendMessage(chatId, `ok, igual ${jugador} no estaba anotade para jugar`)
   }
 })
 
 // {nombre} juega
-bot.onText(/^((\w|\.|\-|_)+) juega$/, (msg, match) => {
+bot.onText(/^((\w|\.|\-|_)+) juega$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
   const equipo = getPartido(chatId)
@@ -131,12 +173,13 @@ bot.onText(/^((\w|\.|\-|_)+) juega$/, (msg, match) => {
     bot.sendMessage(chatId, `ya anote a ${jugador}`)
   } else {
     equipo.add(jugador)
+    guardar()
     print(chatId, jugador, true)
   }
 })
 
 // Juego
-bot.onText(/^(juego|Juego)$/, (msg, match) => {
+bot.onText(/^juego$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
   const equipo = getPartido(chatId)
@@ -144,17 +187,19 @@ bot.onText(/^(juego|Juego)$/, (msg, match) => {
     bot.sendMessage(chatId, `ya te habia anotado, ${jugador}`)
   } else {
     equipo.add(jugador)
+    guardar()
     print(chatId, jugador, true)
   }
 })
 
 // No juego
-bot.onText(/^(no juego|No juego)$/, (msg, match) => {
+bot.onText(/^no juego$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
   const equipo = getPartido(chatId)
   if (equipo.has(jugador)) {
     equipo.delete(jugador)
+    guardar()
     print(chatId, jugador, false)
   } else {
     bot.sendMessage(chatId, `ok, igual no estabas anotade para jugar`)
@@ -162,18 +207,19 @@ bot.onText(/^(no juego|No juego)$/, (msg, match) => {
 })
 
 // Resetear
-bot.onText(/^(reset|Reset)$/, (msg, match) => {
+bot.onText(/^reset$/i, (msg, match) => {
   const chatId = msg.chat.id
   const equipo = getPartido(chatId)
   for (const persona of Array.from(equipo)) {
     equipo.delete(persona)
   }
+  guardar()
   bot.sendMessage(chatId, 'ok reseteo el equipo')
 })
 
 // Lista de anotados
 bot.onText(
-  /^(lista|Lista|anotados|Anotados|quienes juegan|quien juega|quienes juegan\?|quien juega\?)$/,
+  /^(lista|anotados|quienes juegan|quien juega|quienes somos)\??$/i,
   (msg, match) => {
     const chatId = msg.chat.id
     const equipo = getPartido(chatId)
@@ -190,7 +236,7 @@ bot.onText(
 )
 
 // Armar equipos
-bot.onText(/^(equipos|Equipos|equipo|Equipo)$/, (msg, match) => {
+bot.onText(/^equipo(s)?$/i, (msg, match) => {
   const chatId = msg.chat.id
   const equipo = getPartido(chatId)
   const mezcladito = shuffle(Array.from(equipo))
@@ -215,7 +261,7 @@ ${equipo2.join('\n')}`
 })
 
 // Formulario COVID
-bot.onText(/^(form|formulario|Form|Formulario)$/, (msg, match) => {
+bot.onText(/^(form|formulario)$/i, (msg, match) => {
   const chatId = msg.chat.id
   bot.sendMessage(
     chatId,
@@ -224,7 +270,7 @@ bot.onText(/^(form|formulario|Form|Formulario)$/, (msg, match) => {
 })
 
 // Precio crypto
-bot.onText(/^precio (\w+)$/, async (msg, match) => {
+bot.onText(/^precio (\w+)$/i, async (msg, match) => {
   const chatId = msg.chat.id
   const crypto = match[1].toLowerCase()
   try {
