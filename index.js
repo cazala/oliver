@@ -31,7 +31,7 @@ function getJugador(msg) {
     jugador = msg.from.last_name
   } else if (msg.from && msg.from.username) {
     jugador = msg.from.username
-  } else {
+  } else if (msg.chat) {
     jugador = msg.chat.username
   }
 
@@ -42,13 +42,12 @@ function getJugador(msg) {
 
 function getPartido(chatId) {
   const semana = getSemana()
-  if (!partidos[chatId]) {
-    partidos[chatId] = {}
+  if (!partidos[semana]) {
+    partidos[semana] = {}
   }
   if (!partidos[semana][chatId]) {
     partidos[semana][chatId] = new Set()
   }
-
   return partidos[semana][chatId]
 }
 
@@ -79,8 +78,8 @@ function print(chatId, jugador, juega) {
           : `sobran ${partido.size - total}`
       }`
     )
-  } catch (e) {
-    console.log('error', e.message)
+  } catch (error) {
+    console.error('Error loco:', error.message)
   }
 }
 
@@ -102,34 +101,30 @@ function cargar() {
     if (error instanceof Error && error.message.includes('ENOENT')) {
       guardar()
     } else {
-      console.log(`Error cargando archivo "${ARCHIVO}":`, error.message)
+      console.error(`Error cargando archivo "${ARCHIVO}":`, error.message)
     }
   }
 }
 
 function guardar() {
-  console.log('Guardando datos')
   try {
     const semana = getSemana()
     const data = {
       semana,
       partidos: {},
     }
-    console.log(`Guardando datos semana=${semana}`)
     if (partidos[semana]) {
       for (const chatId in partidos[semana]) {
         const partido = partidos[semana][chatId]
-        if (partido instanceof Set && partido.size() > 0) {
+        if (partido instanceof Set && partido.size > 0) {
           data.partidos[chatId] = Array.from(partido)
         }
       }
-    } else {
-      console.log(`No hay partidos para guardar esta semana=${semana}`)
     }
     const json = JSON.stringify(data, null, 2)
     fs.writeFileSync(ARCHIVO, json, 'utf8')
   } catch (error) {
-    console.error(`Error guarando archivo "${ARCHIVO}":`, error.message)
+    console.error(`Error guardando archivo "${ARCHIVO}":`, error.message)
   }
 }
 
@@ -156,9 +151,9 @@ bot.onText(/^quien es (.+)/i, (msg, match) => {
 bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
-  const equipo = getPartido(chatId)
-  if (equipo.has(jugador)) {
-    equipo.delete(jugador)
+  const partido = getPartido(chatId)
+  if (partido.has(jugador)) {
+    partido.delete(jugador)
     print(chatId, jugador, false)
     guardar()
   } else {
@@ -170,11 +165,11 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
 bot.onText(/^((\w|\.|\-|_)+) juega$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = match[1].toLowerCase()
-  const equipo = getPartido(chatId)
-  if (equipo.has(jugador)) {
+  const getPartido = getPartido(chatId)
+  if (getPartido.has(jugador)) {
     bot.sendMessage(chatId, `ya anote a ${jugador}`)
   } else {
-    equipo.add(jugador)
+    getPartido.add(jugador)
     guardar()
     print(chatId, jugador, true)
   }
@@ -184,11 +179,11 @@ bot.onText(/^((\w|\.|\-|_)+) juega$/i, (msg, match) => {
 bot.onText(/^juego$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
-  const equipo = getPartido(chatId)
-  if (equipo.has(jugador)) {
+  const partido = getPartido(chatId)
+  if (partido.has(jugador)) {
     bot.sendMessage(chatId, `ya te habia anotado, ${jugador}`)
   } else {
-    equipo.add(jugador)
+    partido.add(jugador)
     guardar()
     print(chatId, jugador, true)
   }
@@ -198,9 +193,9 @@ bot.onText(/^juego$/i, (msg, match) => {
 bot.onText(/^no juego$/i, (msg, match) => {
   const chatId = msg.chat.id
   const jugador = getJugador(msg)
-  const equipo = getPartido(chatId)
-  if (equipo.has(jugador)) {
-    equipo.delete(jugador)
+  const partido = getPartido(chatId)
+  if (partido.has(jugador)) {
+    partido.delete(jugador)
     guardar()
     print(chatId, jugador, false)
   } else {
@@ -211,9 +206,9 @@ bot.onText(/^no juego$/i, (msg, match) => {
 // Resetear
 bot.onText(/^reset$/i, (msg, match) => {
   const chatId = msg.chat.id
-  const equipo = getPartido(chatId)
-  for (const persona of Array.from(equipo)) {
-    equipo.delete(persona)
+  const partido = getPartido(chatId)
+  for (const persona of Array.from(partido)) {
+    partido.delete(persona)
   }
   guardar()
   bot.sendMessage(chatId, 'ok reseteo el equipo')
@@ -224,8 +219,8 @@ bot.onText(
   /^(lista|anotados|quienes juegan|quien juega|quienes somos)\??$/i,
   (msg, match) => {
     const chatId = msg.chat.id
-    const equipo = getPartido(chatId)
-    const lista = Array.from(equipo)
+    const partido = getPartido(chatId)
+    const lista = Array.from(partido)
     bot.sendMessage(
       chatId,
       lista.length === 0
@@ -240,8 +235,8 @@ bot.onText(
 // Armar equipos
 bot.onText(/^equipo(s)?$/i, (msg, match) => {
   const chatId = msg.chat.id
-  const equipo = getPartido(chatId)
-  const mezcladito = shuffle(Array.from(equipo))
+  const partido = getPartido(chatId)
+  const mezcladito = shuffle(Array.from(partido))
   const mitad = (mezcladito.length / 2) | 0
   const equipo1 = []
   const equipo2 = []
