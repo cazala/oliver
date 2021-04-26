@@ -219,7 +219,7 @@ bot.onText(/^(form|formulario|Form|Formulario)$/, (msg, match) => {
   const chatId = msg.chat.id
   bot.sendMessage(
     chatId,
-    'Esta aca https://docs.google.com/forms/d/e/1FAIpQLSdI8b2xc0ZZ8G8VxZm-ysUrqVSdSRgSuH2A18h8t6TDrI6Gdg/viewform'
+    'Esta aca https://docs.google.com/forms/d/e/1FAIpQLSePfEAb7jUS-64Oo7ilXMQZISXGkvb5JLOi0k7IHYIl3JdG2g/viewform'
   )
 })
 
