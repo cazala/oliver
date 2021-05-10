@@ -79,7 +79,7 @@ function print(chatId, jugador, juega) {
       }`
     )
   } catch (error) {
-    console.error('Error loco:', error.message)
+    console.log('Error loco:', error.message)
   }
 }
 
@@ -107,7 +107,7 @@ function cargar() {
     if (error instanceof Error && error.message.includes('ENOENT')) {
       guardar()
     } else {
-      console.error(`Error cargando archivo "${ARCHIVO}":`, error.message)
+      console.log(`Error cargando archivo "${ARCHIVO}":`, error.message)
     }
   }
 }
@@ -133,9 +133,14 @@ function guardar() {
   try {
     const data = getData()
     const json = JSON.stringify(data, null, 2)
-    fs.writeFileSync(ARCHIVO, json, 'utf8')
+    fs.writeFile(ARCHIVO, json, 'utf8', (error) => {
+      if (error) {
+        console.log('Error:', error.message)
+      }
+      console.log('Guardado!')
+    })
   } catch (error) {
-    console.error(`Error guardando archivo "${ARCHIVO}":`, error.message)
+    console.log(`Error guardando archivo "${ARCHIVO}":`, error.message)
   }
 }
 
