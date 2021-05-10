@@ -166,10 +166,10 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
   if (partido.has(jugador)) {
     partido.delete(jugador)
     print(chatId, jugador, false)
-    guardar()
   } else {
     bot.sendMessage(chatId, `ok, igual ${jugador} no estaba anotade para jugar`)
   }
+  guardar()
 })
 
 // {nombre} juega
@@ -181,8 +181,8 @@ bot.onText(/^((\w|\.|\-|_)+) juega$/i, (msg, match) => {
     bot.sendMessage(chatId, `ya anote a ${jugador}`)
   } else {
     partido.add(jugador)
-    guardar()
     print(chatId, jugador, true)
+    guardar()
   }
 })
 
@@ -198,12 +198,12 @@ bot.onText(/^((\w|\s|\.|\-|_)+) juegan$/i, (msg, match) => {
     for (const jugador of jugadores) {
       partido.add(jugador)
     }
-    guardar()
     if (jugadores.length === 1) {
       print(chatId, jugadores[0], true)
     } else {
       bot.sendMessage(chatId, `Listo, anote a los ${jugadores.length}`)
     }
+    guardar()
   }
 })
 
@@ -216,8 +216,8 @@ bot.onText(/^juego$/i, (msg, match) => {
     bot.sendMessage(chatId, `ya te habia anotado, ${jugador}`)
   } else {
     partido.add(jugador)
-    guardar()
     print(chatId, jugador, true)
+    guardar()
   }
 })
 
@@ -228,11 +228,11 @@ bot.onText(/^no juego$/i, (msg, match) => {
   const partido = getPartido(chatId)
   if (partido.has(jugador)) {
     partido.delete(jugador)
-    guardar()
     print(chatId, jugador, false)
   } else {
     bot.sendMessage(chatId, `ok, igual no estabas anotade para jugar`)
   }
+  guardar()
 })
 
 // Resetear
@@ -242,8 +242,8 @@ bot.onText(/^reset$/i, (msg, match) => {
   for (const persona of Array.from(partido)) {
     partido.delete(persona)
   }
-  guardar()
   bot.sendMessage(chatId, 'ok reseteo el equipo')
+  guardar()
 })
 
 // Lista de anotados
