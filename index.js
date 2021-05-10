@@ -87,15 +87,21 @@ const ARCHIVO = path.resolve(__dirname, './data.json')
 
 function cargar() {
   try {
+    const semana = getSemana()
+    console.log(`Cargando partidos para semana="${semana}"`)
     const json = fs.readFileSync(ARCHIVO, 'utf-8')
     data = JSON.parse(json)
-    if (data && data.semana === getSemana() && data.partidos) {
+    if (data && data.semana === semana && data.partidos) {
       for (const chatId in data.partidos) {
+        console.log(`Cargando partido para chatId="${chatId}"`)
         const partido = getPartido(chatId)
         for (const jugador of data.partidos[chatId]) {
+          console.log(`Agregando jugador="${jugador}"`)
           partido.add(jugador)
         }
       }
+    } else {
+      console.log('No hay partidos')
     }
   } catch (error) {
     if (error instanceof Error && error.message.includes('ENOENT')) {
@@ -106,21 +112,26 @@ function cargar() {
   }
 }
 
-function guardar() {
-  try {
-    const semana = getSemana()
-    const data = {
-      semana,
-      partidos: {},
-    }
-    if (partidos[semana]) {
-      for (const chatId in partidos[semana]) {
-        const partido = partidos[semana][chatId]
-        if (partido instanceof Set && partido.size > 0) {
-          data.partidos[chatId] = Array.from(partido)
-        }
+function getData() {
+  const semana = getSemana()
+  const data = {
+    semana,
+    partidos: {},
+  }
+  if (partidos[semana]) {
+    for (const chatId in partidos[semana]) {
+      const partido = partidos[semana][chatId]
+      if (partido instanceof Set && partido.size > 0) {
+        data.partidos[chatId] = Array.from(partido)
       }
     }
+  }
+  return data
+}
+
+function guardar() {
+  try {
+    const data = getData()
     const json = JSON.stringify(data, null, 2)
     fs.writeFileSync(ARCHIVO, json, 'utf8')
   } catch (error) {
@@ -310,7 +321,13 @@ bot.onText(/^precio (\w+)$/i, async (msg, match) => {
 bot.onText(/^debug/, (msg, match) => {
   const chatId = msg.chat.id
   const semana = getSemana()
-  bot.sendMessage(chatId, `chatId: ${chatId}, semana: ${semana}`)
+  const partido = getPartido(chatId)
+  bot.sendMessage(
+    chatId,
+    `chatId: ${chatId}\n semana: ${semana}\n partido: ${
+      partido.length === 0 ? 'nadie anotado' : Array.from(partido).join(', ')
+    }\n data: ${JSON.stringify(getData(), null, 2)}`
+  )
 })
 
 function shuffle(array) {
