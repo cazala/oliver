@@ -325,7 +325,7 @@ bot.onText(/^debug/, (msg, match) => {
   bot.sendMessage(
     chatId,
     `chatId: ${chatId}\n semana: ${semana}\n partido: ${
-      partido.length === 0 ? 'nadie anotado' : Array.from(partido).join(', ')
+      partido.size === 0 ? 'nadie anotado' : Array.from(partido).join(', ')
     }\n data: ${JSON.stringify(getData(), null, 2)}`
   )
 })
