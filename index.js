@@ -91,7 +91,12 @@ function cargar() {
     console.log(`Cargando partidos para semana="${semana}"`)
     const json = fs.readFileSync(ARCHIVO, 'utf-8')
     data = JSON.parse(json)
-    if (data && data.semana === semana && data.partidos) {
+    if (
+      data &&
+      data.semana === semana &&
+      data.partidos &&
+      Object.keys(data.partidos).length > 0
+    ) {
       for (const chatId in data.partidos) {
         console.log(`Cargando partido para chatId="${chatId}"`)
         const partido = getPartido(chatId)
@@ -329,9 +334,9 @@ bot.onText(/^debug/, (msg, match) => {
   const partido = getPartido(chatId)
   bot.sendMessage(
     chatId,
-    `chatId: ${chatId}\n semana: ${semana}\n partido: ${
+    `chatId: ${chatId}\nsemana: ${semana}\npartido: ${
       partido.size === 0 ? 'nadie anotado' : Array.from(partido).join(', ')
-    }\n data: ${JSON.stringify(getData(), null, 2)}`
+    }\n\ndata: ${JSON.stringify(getData(), null, 2)}`
   )
 })
 
