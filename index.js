@@ -7,20 +7,82 @@ const TelegramBot = require('node-telegram-bot-api')
 const token = process.env.TELEGRAM_BOT_TOKEN
 const bot = new TelegramBot(token, { polling: true })
 
+const Weekday = Object.freeze({
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+})
+
 let total = 10
 let partidos = {}
+let weekResetDayByChatId = {}
+
+let dateDayOffset = 0
 
 //--------------------------------------------
 // Helpers
 //--------------------------------------------
 
-function getSemana() {
+function getWeekdayName(weekday) {
+  switch (weekday) {
+    case Weekday.Monday: return "lunes"
+    case Weekday.Tuesday: return "martes"
+    case Weekday.Wednesday: return "miercoles"
+    case Weekday.Thursday: return "jueves"
+    case Weekday.Friday: return "viernes"
+    case Weekday.Saturday: return "sabado"
+    case Weekday.Sunday: return "domingo"
+  }
+}
+
+function getWeekdayFromName(name) {
+  switch (name) {
+    case "lunes": return Weekday.Monday
+    case "martes": return Weekday.Tuesday
+    case "miercoles": return Weekday.Wednesday
+    case "jueves": return Weekday.Thursday
+    case "viernes": return Weekday.Friday
+    case "sabado": return Weekday.Saturday
+    case "domingo": return Weekday.Sunday
+  }
+}
+
+function getWeekResetDayForChatId(chatId) {
+
+  if (weekResetDayByChatId[chatId] === undefined) {
+    weekResetDayByChatId[chatId] = Weekday.Monday
+  }
+
+  return weekResetDayByChatId[chatId]
+}
+
+function getCurrentDate() {
+  var date = new Date()
+  date.setUTCDate(date.getUTCDate() + dateDayOffset)
+  return date
+}
+
+function getSemana(chatId) {
+  var resetDay = getWeekResetDayForChatId(chatId)
+  return getWeekNumberForDateStartingOnWeekday(getCurrentDate(), resetDay)
+}
+
+function getWeekNumberForDateStartingOnWeekday(date, startOfWeek) {
+  
+  var dayOfWeek = date.getUTCDay()
+  if (dayOfWeek < startOfWeek) {
+    dayOfWeek = dayOfWeek + 7
+  }
+  
   // copypasta de stack overflow :+1:
-  d = new Date()
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
-  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  var weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7)
-  return weekNo
+  var weekThursday = date.getUTCDate() + 4 - dayOfWeek
+  date.setUTCDate(weekThursday)
+  var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return Math.ceil((((date - yearStart)) / 86400000 + 1) / 7)
 }
 
 function getJugador(msg) {
@@ -41,14 +103,18 @@ function getJugador(msg) {
 }
 
 function getPartido(chatId) {
-  const semana = getSemana()
-  if (!partidos[semana]) {
-    partidos[semana] = {}
+  
+  const semana = getSemana(chatId)
+
+  if (!partidos[chatId]) {
+    partidos[chatId] = {}
   }
-  if (!partidos[semana][chatId]) {
-    partidos[semana][chatId] = new Set()
+
+  if (!partidos[chatId][semana]) {
+    partidos[chatId][semana] = new Set()
   }
-  return partidos[semana][chatId]
+
+  return partidos[chatId][semana]
 }
 
 function prefix() {
@@ -83,28 +149,20 @@ function print(chatId, jugador, juega) {
   }
 }
 
-const ARCHIVO = path.resolve(__dirname, './data.json')
+const ARCHIVO = path.resolve(__dirname, './data_v2.json')
 
 function cargar() {
   try {
-    const semana = getSemana()
-    console.log(`Cargando partidos para semana="${semana}"`)
+    
+    console.log(`Cargando partidos`)
     const json = fs.readFileSync(ARCHIVO, 'utf-8')
     data = JSON.parse(json)
     if (
       data &&
-      data.semana === semana &&
       data.partidos &&
       Object.keys(data.partidos).length > 0
     ) {
-      for (const chatId in data.partidos) {
-        console.log(`Cargando partido para chatId="${chatId}"`)
-        const partido = getPartido(chatId)
-        for (const jugador of data.partidos[chatId]) {
-          console.log(`Agregando jugador="${jugador}"`)
-          partido.add(jugador)
-        }
-      }
+      loadMatches(data)
     } else {
       console.log('No hay partidos')
     }
@@ -117,21 +175,75 @@ function cargar() {
   }
 }
 
-function getData() {
-  const semana = getSemana()
-  const data = {
-    semana,
-    partidos: {},
+function loadMatches(data) {
+  for (const chatId in data.partidos) {
+    loadMatchForChatId(chatId, data.partidos[chatId])
   }
-  if (partidos[semana]) {
-    for (const chatId in partidos[semana]) {
-      const partido = partidos[semana][chatId]
-      if (partido instanceof Set && partido.size > 0) {
-        data.partidos[chatId] = Array.from(partido)
-      }
+}
+
+function loadMatchForChatId(chatId, chatIdData) {
+  
+  console.log(`Cargando partido para chatId "${chatId}"`)
+
+  const dataWeekResetDay = chatIdData.week_reset_day
+  const dataWeekNumber = chatIdData.week_number
+
+  var weekResetDay = getWeekdayFromName(dataWeekResetDay)
+  weekResetDayByChatId[chatId] = weekResetDay
+
+  console.log(`Dia de reset "${dataWeekResetDay}" (${weekResetDay})`)
+
+  const semana = getSemana(chatId)
+  
+  if (semana === dataWeekNumber) {
+    console.log(`Cargando jugadores al partido`)
+
+    const partido = getPartido(chatId)
+
+    for (const jugador of chatIdData.players) {
+      console.log(`Agregando jugador "${jugador}"`)
+      partido.add(jugador)
     }
   }
+  else {
+    console.log(`Omitiendo carga de jugadores. La semana actual ("${semana}") no coincide con la semana guardada ("${dataWeekNumber}")`)
+  }
+}
+
+function getData() {
+  
+  const data = {
+    partidos: {},
+  }
+
+  for (const chatId in partidos) {
+
+    var week = getSemana(chatId)
+    var weekResetDay = getWeekdayName(getWeekResetDayForChatId(chatId))
+    var players = []
+
+    var playersForCurrentWeek = partidos[chatId][week]
+    if (playersForCurrentWeek instanceof Set) {
+      players = Array.from(playersForCurrentWeek)
+    }
+
+    const chatIdData = {
+      week_number: week,
+      week_reset_day: weekResetDay,
+      players: players
+    }
+
+    data.partidos[chatId] = chatIdData
+  }
+
   return data
+}
+
+function resetMatchForChatId(chatId) {
+  const partido = getPartido(chatId)
+  for (const persona of Array.from(partido)) {
+    partido.delete(persona)
+  }
 }
 
 function guardar() {
@@ -177,7 +289,7 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
     partido.delete(jugador)
     print(chatId, jugador, false)
   } else {
-    bot.sendMessage(chatId, `ok, igual ${jugador} no estaba anotade para jugar`)
+    bot.sendMessage(chatId, `Ok, igual ${jugador} no estaba anotade para jugar`)
   }
   guardar()
 })
@@ -248,11 +360,8 @@ bot.onText(/^no juego$/i, (msg, match) => {
 // Resetear
 bot.onText(/^reset$/i, (msg, match) => {
   const chatId = msg.chat.id
-  const partido = getPartido(chatId)
-  for (const persona of Array.from(partido)) {
-    partido.delete(persona)
-  }
-  bot.sendMessage(chatId, 'ok reseteo el equipo')
+  resetMatchForChatId(chatId)
+  bot.sendMessage(chatId, 'Ok, reseteo el equipo')
   guardar()
 })
 
@@ -327,17 +436,51 @@ bot.onText(/^precio (\w+)$/i, async (msg, match) => {
   }
 })
 
-// debug
-bot.onText(/^debug/, (msg, match) => {
+// Cambia el dia de la semana en que se resetean los partidos
+bot.onText(/^\/reset_on (\w+)$/i, (msg, match) => {
   const chatId = msg.chat.id
-  const semana = getSemana()
+  const resetDayString = match[1].toLowerCase()
+  const resetDay = getWeekdayFromName(resetDayString)
+
+  var message = ""
+
+  if (resetDay !== undefined) {
+    weekResetDayByChatId[chatId] = resetDay
+    resetMatchForChatId(chatId)
+    message = `Oki, los partidos se van a resetear los dias ${resetDayString}`
+  }
+  else {
+    message = `Mmm no entendi que dia me dijiste... Ojo que no entiendo los acentos!`
+  }
+
+  bot.sendMessage(chatId, message)
+  guardar()
+})
+
+// debug
+bot.onText(/^\/debug$/i, (msg, match) => {
+  const chatId = msg.chat.id
+  const semana = getSemana(chatId)
   const partido = getPartido(chatId)
+  const weekResetDay = getWeekResetDayForChatId(chatId)
   bot.sendMessage(
     chatId,
-    `chatId: ${chatId}\nsemana: ${semana}\npartido: ${
-      partido.size === 0 ? 'nadie anotado' : Array.from(partido).join(', ')
-    }\n\ndata: ${JSON.stringify(getData(), null, 2)}`
+    `chatId: ${chatId}\n` +
+    `Reset dia: ${ getWeekdayName(weekResetDay) }\n` + 
+    `Semana numero: ${ semana }\n` + 
+    `Fecha: ${ getCurrentDate().toUTCString() }\n` + 
+    `Partido: ${ partido.size === 0 ? 'nadie anotado' : Array.from(partido).join(', ') }\n\n` + 
+    `data: ${ JSON.stringify(getData(), null, 2) }`
   )
+})
+
+// Back to the Future
+bot.onText(/^\/debug_bttf (-?\d*)$/i, (msg, match) => {
+  const chatId = msg.chat.id
+  dateDayOffset = dateDayOffset + parseInt(match[1])
+  bot.sendMessage(chatId, 
+    `Ahora la fecha esta desfasada ${ dateDayOffset } dias.\n` + 
+    `La fecha es ${ getCurrentDate().toUTCString() }`)
 })
 
 function shuffle(array) {
