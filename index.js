@@ -117,36 +117,65 @@ function getPartido(chatId) {
   return partidos[chatId][semana]
 }
 
-function prefix() {
-  const n = (Math.random() * 10) | 0
-  switch (n) {
-    case 0:
-      return 'sabe, '
-    case 1:
-      return 'de una, '
-    case 2:
-      return 'oki '
-    default:
-      return ''
-  }
-}
-
-function print(chatId, jugador, juega) {
-  const partido = getPartido(chatId)
+function sendReplyMessage(chatId, jugador, juega, withExclamation) {
   try {
     bot.sendMessage(
       chatId,
-      `${prefix()}${jugador} ${juega ? 'juega, ' : 'no juega, ahora '}${
-        partido.size === total
-          ? 'equipos completos'
-          : partido.size < total
-          ? `faltan ${total - partido.size}`
-          : `sobran ${partido.size - total}`
-      }`
+      createReplyMessage(jugador, getPartido(chatId), juega, withExclamation)
     )
   } catch (error) {
     console.log('Error loco:', error.message)
   }
+}
+
+function createReplyMessage(jugador, partido, juega, withExclamation) {
+  return `${replyMessagePrefix(juega, withExclamation)}${jugador} ${juega ? 'juega,' : 'no juega, ahora'} ${replyMessagePostfix(partido)}`
+}
+
+function replyMessagePrefix(juega, withExclamation) {
+  return juega ? replyPlayMessagePrefix(withExclamation) : replyNotPlayMessagePrefix()
+}
+
+function replyPlayMessagePrefix(withExclamation) {
+  const n = (Math.random() * (withExclamation ? 5 : 10)) | 0
+
+    switch (n) {
+      case 0:
+        return withExclamation ? 'Sabe! ' : 'Sabe, '
+      case 1:
+        return withExclamation ? 'Sapbe! ' : 'Sapbe, '
+      case 2:
+        return withExclamation ? 'De una! ' : 'De una, '
+      case 3:
+        return withExclamation ? 'De one! ' : 'De one, '
+      case 4:
+        return withExclamation ? 'Oki! ' : 'Oki '
+      default:
+        return ''
+    }
+}
+
+function replyNotPlayMessagePrefix() {
+  const n = (Math.random() * 4) | 0
+
+  switch (n) {
+    case 0:
+      return "Uh! Oki, "
+    case 1:
+      return "Malisimo... "
+    case 2:
+      return "Bueno, "
+    case 3:
+      return "Bajon! "
+  }
+}
+
+function replyMessagePostfix(partido) {
+  return partido.size === total
+    ? 'equipos completos!'
+    : partido.size < total
+      ? `faltan ${total - partido.size}`
+      : `sobran ${partido.size - total}`
 }
 
 const ARCHIVO = path.resolve(__dirname, './data_v2.json')
@@ -271,7 +300,7 @@ cargar()
 // saludo
 bot.onText(/^hola$/i, (msg, match) => {
   const chatId = msg.chat.id
-  bot.sendMessage(chatId, 'hola caracola')
+  bot.sendMessage(chatId, 'Hola caracola')
 })
 
 // joder a Shibu
@@ -287,7 +316,7 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
   const partido = getPartido(chatId)
   if (partido.has(jugador)) {
     partido.delete(jugador)
-    print(chatId, jugador, false)
+    sendReplyMessage(chatId, jugador, false, false)
   } else {
     bot.sendMessage(chatId, `Ok, igual ${jugador} no estaba anotade para jugar`)
   }
@@ -296,17 +325,26 @@ bot.onText(/^((\w|\.|\-|_)+) no juega$/i, (msg, match) => {
 
 // {nombre} juega
 bot.onText(/^((\w|\.|\-|_)+) juega$/i, (msg, match) => {
-  const chatId = msg.chat.id
+  onSomeonePlaysMessageReceived(msg, match, false)
+})
+
+// {nombre} juega!
+bot.onText(/^((\w|\.|\-|_)+) juega!$/i, (msg, match) => {
+  onSomeonePlaysMessageReceived(msg, match, true)
+})
+
+function onSomeonePlaysMessageReceived(message, match, withExclamation) {
+  const chatId = message.chat.id
   const jugador = match[1].toLowerCase()
   const partido = getPartido(chatId)
   if (partido.has(jugador)) {
-    bot.sendMessage(chatId, `ya anote a ${jugador}`)
+    bot.sendMessage(chatId, `Ya anote a ${jugador}`)
   } else {
     partido.add(jugador)
-    print(chatId, jugador, true)
+    sendReplyMessage(chatId, jugador, true, withExclamation)
     guardar()
   }
-})
+}
 
 // {nombre-1} {nombre-2} ...{nombre-N} juegan
 bot.onText(/^((\w|\s|\.|\-|_)+) juegan$/i, (msg, match) => {
@@ -321,7 +359,7 @@ bot.onText(/^((\w|\s|\.|\-|_)+) juegan$/i, (msg, match) => {
       partido.add(jugador)
     }
     if (jugadores.length === 1) {
-      print(chatId, jugadores[0], true)
+      sendReplyMessage(chatId, jugadores[0], true, false)
     } else {
       bot.sendMessage(chatId, `Listo, anote a los ${jugadores.length}`)
     }
@@ -331,17 +369,26 @@ bot.onText(/^((\w|\s|\.|\-|_)+) juegan$/i, (msg, match) => {
 
 // Juego
 bot.onText(/^juego$/i, (msg, match) => {
-  const chatId = msg.chat.id
-  const jugador = getJugador(msg)
+  onPlayMessageReceived(msg, false)
+})
+
+// Juego
+bot.onText(/^juego!$/i, (msg, match) => {
+  onPlayMessageReceived(msg, true)
+})
+
+function onPlayMessageReceived(message, withExclamation) {
+  const chatId = message.chat.id
+  const jugador = getJugador(message)
   const partido = getPartido(chatId)
   if (partido.has(jugador)) {
-    bot.sendMessage(chatId, `ya te habia anotado, ${jugador}`)
+    bot.sendMessage(chatId, `Ya te habia anotado, ${jugador}`)
   } else {
     partido.add(jugador)
-    print(chatId, jugador, true)
+    sendReplyMessage(chatId, jugador, true, withExclamation)
     guardar()
   }
-})
+}
 
 // No juego
 bot.onText(/^no juego$/i, (msg, match) => {
@@ -350,9 +397,9 @@ bot.onText(/^no juego$/i, (msg, match) => {
   const partido = getPartido(chatId)
   if (partido.has(jugador)) {
     partido.delete(jugador)
-    print(chatId, jugador, false)
+    sendReplyMessage(chatId, jugador, false, false)
   } else {
-    bot.sendMessage(chatId, `ok, igual no estabas anotade para jugar`)
+    bot.sendMessage(chatId, `Ok, igual no estabas anotade para jugar`)
   }
   guardar()
 })
@@ -375,8 +422,8 @@ bot.onText(
     bot.sendMessage(
       chatId,
       lista.length === 0
-        ? `Por ahora no hay nadie anotado`
-        : `Por ahora tengo anotados a ${lista.length} personas:\n${lista.join(
+        ? `Por ahora no hay nadie anotade`
+        : `Por ahora tengo anotadas a ${lista.length} personas:\n${lista.join(
             '\n'
           )}`
     )
